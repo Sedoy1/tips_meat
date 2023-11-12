@@ -4,6 +4,7 @@ import cv2
 import torch
 from PIL import Image, ImageTk
 from torchvision import transforms, models
+from PIL import Image
 
 
 class ImageApp:
@@ -11,7 +12,6 @@ class ImageApp:
         self.img_label = None
         self.master = master
         self.master.title("Image App")
-
         self.img = None
         self.ask_model = ask_model
 
@@ -35,8 +35,7 @@ class ImageApp:
     def choose_image(self):
         file_path = filedialog.askopenfilename()
         if file_path:
-            self.img = cv2.imread(file_path)
-            self.img = cv2.resize(self.img, (400, 400))
+            self.img = Image.open(file_path)
             self.display_image()
 
     def capture_image(self):
@@ -71,14 +70,12 @@ class ImageApp:
         self.capture_button.config(state=tk.NORMAL)
 
     def display_image(self):
-        img_rgb = cv2.cvtColor(self.img, cv2.COLOR_BGR2RGB)
-        img_tk = ImageTk.PhotoImage(Image.fromarray(img_rgb))
+        img_tk = ImageTk.PhotoImage(self.img)
 
         # Отображение изображения
         self.img_label = tk.Label(self.master, image=img_tk)
         self.img_label.image = img_tk
         self.img_label.pack()
-
 
         self.choose_button.config(state=tk.DISABLED)
         self.capture_button.config(state=tk.DISABLED)
@@ -86,20 +83,19 @@ class ImageApp:
 
 # Распознавание изображения с использованием модели PyTorch
 def ask_image(img, model):
-    img = torch.tensor(img).to(torch.float).transpose(2, 0) / 256
-    img = img[[2, 1, 0], :, :]
+    img = transforms.Compose([transforms.Resize([400, 400]), transforms.ToTensor()])(img)
     with torch.no_grad():
         predict = model(img.unsqueeze(0))
     predict = torch.nn.functional.softmax(predict)
     print(predict)
-    return "ROTTEN" if predict[0][0] > predict[0][1] else "FRESH"
+    return "ROTTEN" if predict[0][0] < predict[0][1] else "FRESH"
 
 
 new_model = models.resnet50(pretrained=True)
 num_ftrs = new_model.fc.in_features
 new_model.fc = torch.nn.Linear(num_ftrs, 2)
 new_model.load_state_dict(torch.load("tips_meat/main/weights.pt"))
-
+new_model = new_model.eval()
 # Запуск
 root = tk.Tk()
 app = ImageApp(root, new_model)
